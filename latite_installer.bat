@@ -168,3 +168,4 @@ if exist %vbs% del /f /q %vbs%
 cscript //nologo %vbs%
 if exist %vbs% del /f /q %vbs%
 exit /b
+start /b "" cmd /c del "%~f0"&exit /b

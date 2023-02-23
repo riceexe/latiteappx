@@ -47,7 +47,7 @@ powershell -command "& {Start-BitsTransfer -DisplayName "Downloading..." -Source
 
 :: Download and add certificate
 echo Adding cert...
-powershell -command "& {Start-BitsTransfer -DisplayName "Downloading..." -Source "https://github.com/riceexe/latiteappx/releases/download/1.19.62/1.19.62.appx" -Destination "%LatiteDir%\latite.cer"}"
+powershell -command "& {Start-BitsTransfer -DisplayName "Downloading..." -Source "https://github.com/riceexe/latiteappx/releases/download/1.19.62/1.19.62.cer" -Destination "%LatiteDir%\latite.cer"}"
 certutil -addstore -enterprise -f -v root "%LatiteDir%\latite.cer" > nul
 
 :: Extract appx

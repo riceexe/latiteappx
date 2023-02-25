@@ -1,10 +1,4 @@
 @echo off
-
-echo DISCLAIMER: This will replace your minecraft installation with latite client. 
-echo By continuing, you are accepting that things might go wrong, and things might break. Your data shouldn't get deleted,
-echo but it is always smart to make a backup.
-echo Things like persona cosmetics and shaders WILL GET DELETED.
-pause
 set LatiteDir=%userprofile%\Latite
 set LatiteApp=%LatiteDir%\App
 
@@ -18,6 +12,11 @@ if "%errorlevel%" == "0" (
     call :EnableDeveloperMode
 )
 
+echo DISCLAIMER: This will replace your minecraft installation with latite client. 
+echo By continuing, you are accepting that things might go wrong, and things might break. Your data shouldn't get deleted,
+echo but it is always smart to make a backup.
+echo Things like persona cosmetics and shaders WILL GET DELETED.
+pause
 
 :: Remove current Minecraft bedrock installation
 taskkill /f /im Minecraft.Windows.exe >nul 2>&1

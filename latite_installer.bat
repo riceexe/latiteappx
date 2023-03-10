@@ -10,28 +10,33 @@ set LatiteApp=%LatiteDir%\App
 set LatiteAppxUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.appx
 set LatiteCertUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.cer
 setlocal EnableDelayedExpansion EnableExtensions
+set "currentFile=%~0"
 
 :: so the formatting doesn't go all weird when the console outputs a unicode character
 > %temp%\tmp.reg echo Windows Registry Editor Version 5.00
 >> %temp%\tmp.reg echo.
->> %temp%\tmp.reg echo [HKEY_CURRENT_USER\Console\%%SystemRoot%%_system32_cmd.exe]
->> %temp%\tmp.reg echo "ScreenBufferSize"=dword:23290000
->> %temp%\tmp.reg echo "WindowSize"=dword:003600bd
+>> %temp%\tmp.reg echo [HKEY_CURRENT_USER\Console\%%SystemRoot%%_System32_cmd.exe]
+>> %temp%\tmp.reg echo "ScreenBufferSize"=dword:23290096
+>> %temp%\tmp.reg echo "WindowSize"=dword:00320096
 >> %temp%\tmp.reg echo "FontFamily"=dword:00000036
 >> %temp%\tmp.reg echo "FontWeight"=dword:00000190
 >> %temp%\tmp.reg echo "FaceName"="Lucida Console"
 >> %temp%\tmp.reg echo "CursorType"=dword:00000000
 >> %temp%\tmp.reg echo "InterceptCopyPaste"=dword:00000000
+>> %temp%\tmp.reg echo "FontSize"=dword:000f0009
 :: check if there the registry key exists
-reg query HKEY_CURRENT_USER\Console\%SystemRoot%_system32_cmd.exe > nul 2>&1
-if not "%errorlevel%" == "0" reg import %temp%\tmp.reg > nul 2>&1
-del /f /q %temp%\tmp.reg > nul 2>&1
-
+reg query HKEY_CURRENT_USER\Console\%%SystemRoot%%_System32_cmd.exe > nul 2>&1
+if not "%errorlevel%" == "0" (
+  reg import %temp%\tmp.reg > nul 2>&1
+  del /f /q "%temp%\tmp.reg" > nul 2>&1
+  goto :ElevationFallback
+)
+del /f /q "%temp%\tmp.reg" > nul 2>&1
 chcp 65001 > nul
-set "currentFile=%~0"
-if not defined ASCII_13 for /f %%a in ('copy /Z "%~dpf0" nul') do set "ASCII_13=%%a"
-if not defined CR for /F %%C in ('copy /Z "%~f0" nul') do set "CR=%%C"
-if not defined BS for /F %%C in ('echo prompt $H ^| cmd') do set "BS=%%C"
+
+if not defined ASCII_13 for /f %%a in ('2^>nul copy /Z "%~dpf0" nul') do set "ASCII_13=%%a"
+if not defined CR for /F %%C in ('2^>nul copy /Z "%~f0" nul') do set "CR=%%C"
+if not defined BS for /F %%C in ('2^>nul echo prompt $H ^| 2^>nul cmd') do set "BS=%%C"
 
 if "%1" == "--internal-speedmonitor" (
   set "params=%*"
@@ -515,8 +520,7 @@ if not "%~2" == "" echo.%~2
   call :ied2 !delay! "%~1" [==――――――] 
 GOTO BeginLoadLoop
 :EndLoadLoop
-call :iecho [========]
-echo.
+call :iecho 
 chcp 437 > nul
 exit
 
@@ -574,6 +578,40 @@ if "%code%" == "0" (
 )
 exit /b
 
+:ElevationFallback
+net file 1>NUL 2>NUL
+if not "%errorlevel%" == "0" (
+  echo.
+  echo =-=-=-=-=-=-=-=-=-=-=-=-=
+  echo Waiting for elevation...
+  echo =-=-=-=-=-=-=-=-=-=-=-=-=
+)
+set params=%*
+if not "%params%" == "" set "params= %params%"
+> %temp%\LTIConSetup.vbs echo Set objShell = CreateObject^("Shell.Application"^)
+>> %temp%\LTIConSetup.vbs echo If WScript.Arguments.length =0 then
+>> %temp%\LTIConSetup.vbs echo   WScript.Echo(objShell.ShellExecute("wscript.exe", Chr(34) ^& WScript.ScriptFullName ^& Chr(34) ^& " uac", "", "runas", 1))
+>> %temp%\LTIConSetup.vbs echo Else
+>> %temp%\LTIConSetup.vbs echo   objShell.ShellExecute "%WinDir%\System32\cmd.exe", "/c %~0%params%", "%cd%", "runas", 1
+>> %temp%\LTIConSetup.vbs echo End If
+>> %temp%\LTIConSetup.vbs echo WScript.Quit()
+cscript //Nologo %temp%\LTIConSetup.vbs > %temp%\LTIElevSetup.log
+if not "%errorlevel%" == "0" (
+  type %temp%\LTIElevSetup.log
+  echo Error: Elevation failed with code %errorlevel% ^(using VBScript^). Please report this^^!
+  echo Press any key to exit...
+  timeout -t 2 -nobreak > nul
+  del /f /q %temp%\LTIConSetup.vbs
+  del /f /q %temp%\LTIElevSetup.log
+  pause > nul
+  exit /b 1
+)
+timeout -t 1 -nobreak > nul
+del /f /q %temp%\LTIConSetup.vbs
+del /f /q %temp%\LTIElevSetup.log
+exit /b
+
+
 :checkPrivileges
 net file 1>NUL 2>NUL
 if '%errorlevel%' == '0' ( goto gotPrivileges ) else ( goto getPrivileges )
@@ -587,14 +625,20 @@ echo =-=-=-=-=-=-=-=-=-=-=-=-=
 taskkill /f /im waitfor.exe > nul 2>&1
 
 :: short file names are required here, if you don't use them you will get errors with spaces
-powershell.exe Start-Process cmd.exe -Verb RunAs -ArgumentList '/c "%~s0"'
+powershell.exe Start-Process cmd.exe -Verb RunAs -ArgumentList '/c "%~s0"' > %temp%\LTIElevSetup.log 2>&1
 if not "%errorlevel%" == "0" (
+    echo.
+    echo =-=-=-=-=-=-=-=-=-=-=-=-=
+    echo Waiting for elevation...
+    echo =-=-=-=-=-=-=-=-=-=-=-=-=
+    type "%temp%\LTIElevSetup.log"
     :: Todo: Add backup elevation using vbscript
-    echo Error: Elevation failed ^(%errorlevel%^). Please report this!
-    echo Press any key to exit...
-    pause > nul
-    goto :EOF
-)
+    echo Error: Elevation failed with code %errorlevel% ^(using PowerShell^). Please report this^^!
+    echo Attempting elevation using VBScript...
+    del /f /q "%temp%\LTIElevSetup.log" > nul 2>&1
+    timeout -t 2 > nul 2>&1
+    goto :ElevationFallback
+) else ( exit )
 exit /b
 
 :iecho <string>
@@ -602,7 +646,7 @@ setlocal EnableDelayedExpansion
 set "STRING=%*"
 set "SPACCCES=                                                                             "
 ::set /P ="%BS%!CR!%SPACES%!CR!" < nul
-set string=!string:•=%%!
+if not "%string%" == "" set string=!string:•=%%!
 set /p <nul =%BS%!CR!%SPACCCES%!CR!%STRING%
 exit /B
 

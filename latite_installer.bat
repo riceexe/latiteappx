@@ -1,6 +1,14 @@
 @:: Latite Appx Installer
 @:: by rice#2532 and VastraKai#0001
 @if not "%debug%" == "true" @echo off 
+:: The version of Latite to install.
+set LatiteVersion=1.19.63
+:: The directory to use for installation.
+set LatiteDir=%userprofile%\Latite
+:: The directory to install the appx to.
+set LatiteApp=%LatiteDir%\App
+set LatiteAppxUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.appx
+set LatiteCertUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.cer
 setlocal EnableDelayedExpansion EnableExtensions
 
 :: so the formatting doesn't go all weird when the console outputs a unicode character
@@ -20,11 +28,6 @@ if not "%errorlevel%" == "0" reg import %temp%\tmp.reg > nul 2>&1
 del /f /q %temp%\tmp.reg > nul 2>&1
 
 chcp 65001 > nul
-set LatiteDir=%userprofile%\Latite
-set LatiteApp=%LatiteDir%\App
-set LatiteVersion=1.19.63
-set LatiteAppxUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.appx
-set LatiteCertUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.cer
 set "currentFile=%~0"
 if not defined ASCII_13 for /f %%a in ('copy /Z "%~dpf0" nul') do set "ASCII_13=%%a"
 if not defined CR for /F %%C in ('copy /Z "%~f0" nul') do set "CR=%%C"
@@ -54,7 +57,9 @@ call :IsDeveloperModeEnabled
 if not "%errorlevel%" == "0" ( 
     call :EnableDeveloperMode
 )
+title Latite %LatiteVersion% Appx Installer
 if /i not "%~1" == "--uninstall" (
+  echo.
   echo DISCLAIMER: This will replace your minecraft installation with latite client. 
   echo By continuing, you are accepting that things might go wrong, and things might break. Your data shouldn't get deleted,
   echo but it is always smart to make a backup.
@@ -75,8 +80,8 @@ if /i "%~1" == "--uninstall" (
   goto :EOF
 )
 
-md "%LatiteDir%"
-md "%LatiteApp%"
+> nul 2>&1 md "%LatiteDir%"
+> nul 2>&1 md "%LatiteApp%"
 
 
 :: Download appx
@@ -88,25 +93,31 @@ echo Adding certificate...
 call :DownloadFile "%LatiteCertUrl%" "%LatiteDir%\latite.cer"
 certutil -addstore -enterprise -f -v root "%LatiteDir%\latite.cer" > nul
 
-
-echo Checking dependencies (1/3)...
+set DepsAlreadyInstalled=1
+call :iecho Checking dependencies ^(1/3^)...
 powershell Get-AppxPackage Microsoft.Services.Store.Engagement* | findstr /I /C:"x64" > nul 2>&1
 if not "%errorlevel%" == "0" (
-  echo Downloading Microsoft.Services.Store.Engagement.x64.appx...
+  set DepsAlreadyInstalled=0
+  call :iEcho Downloading Microsoft.Services.Store.Engagement.x64.appx...
+  echo.
   call :DownloadFile "https://vastrakai.wtf/downloads/Microsoft.Services.Store.Engagement.x64.appx" "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx"
   call :RunCmdWithLoading "Installing Microsoft.Services.Store.Engagement.x64..." powershell Add-AppPackage "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" -ForceApplicationShutdown
 )
-echo Checking dependencies (2/3)...
+call :iecho Checking dependencies ^(2/3^)...
 powershell Get-AppxPackage Microsoft.VCLibs* | findstr /I /C:"x64" > nul 2>&1
 if not "%errorlevel%" == "0" (
-  echo Downloading Microsoft.VCLibs.x64.appx...
+  set DepsAlreadyInstalled=0
+  call :iEcho Downloading Microsoft.VCLibs.x64.appx...
+  echo.
   call :DownloadFile "https://vastrakai.wtf/downloads/Microsoft.VCLibs.x64.appx" "%LatiteDir%\Microsoft.VCLibs.x64.appx"
   call :RunCmdWithLoading "Installing Microsoft.VCLibs.x64..." powershell Add-AppPackage "%LatiteDir%\Microsoft.VCLibs.x64.appx" -ForceApplicationShutdown
 )
-echo Checking dependencies (3/3)...
+call :iecho Checking dependencies ^(3/3^)...
 call :IsRedistInstalled
 if not "%errorlevel%" == "0" (
-  echo Downloading vc_redist.x64.exe...
+  set DepsAlreadyInstalled=0
+  call :iEcho Downloading Visual C++ Redistributable x64...
+  echo.
   call :DownloadFile "https://aka.ms/vs/17/release/vc_redist.x64.exe" "%LatiteDir%\vc_redist.x64.exe"
   call :RunCmdWithLoading "Installing Visual C++ Redistributable x64..." "%LatiteDir%\vc_redist.x64.exe" /install /quiet /norestart
 )
@@ -115,12 +126,28 @@ del /f /q "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" > nul 2>&1
 del /f /q "%LatiteDir%\Microsoft.VCLibs.x64.appx" > nul 2>&1
 del /f /q "%LatiteDir%\vc_redist.x64.exe" > nul 2>&1
 if exist "%LatiteDir%\vc_redist.x64.exe" goto :trydelete
-echo Dependencies installed.
+if "%DepsAlreadyInstalled%" == "1" (
+  call :iecho 3/3 dependencies installed.
+  echo.
+) else (
+  set errs=0
+  powershell Get-AppxPackage Microsoft.Services.Store.Engagement* | findstr /I /C:"x64" > nul 2>&1
+  set /a errs=!errs! + !errorlevel!
+  powershell Get-AppxPackage Microsoft.VCLibs* | findstr /I /C:"x64" > nul 2>&1
+  set /a errs=!errs! + !errorlevel!
+  call :IsRedistInstalled
+  set /a errs=!errs! + !errorlevel!
+  if "%errs%" == "0" echo All dependencies installed. You may need to restart your computer.
+  if "%errs%" == "1" echo 1 dependency failed to install^^!
+  if not "%errs%" == "0" if not "%errs%" == "1" echo %errs% dependencies failed to install^^!
+  echo.
+)
 call :RunCmdWithLoading "Extracting appx to %LatiteApp%..." call :UnzipFile "%LatiteDir%\latite.appx" "%LatiteApp%"
- 
-echo Registering appx...
-powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
+:: echo Registering appx...
+:: powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
+call :RunCmdWithLoading "Registering appx..." powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
 if "%errorlevel%" == "0" (
+  call :CleanUp
   echo Latite has been installed^^!
   start "" minecraft:
   del /f /q "%LatiteDir%\Latite.zip" > nul 2>&1
@@ -133,6 +160,7 @@ rmdir /s /q "%LatiteApp%" > nul
 echo Registering appx...
 powershell Add-AppxPackage -Path "%LatiteDir%\Latite.appx"
 if "%errorlevel%" == "0" (
+  call :CleanUp
   echo Latite has been installed^^!
   start "" minecraft:
   del /f /q "%LatiteDir%\Latite.zip" > nul 2>&1
@@ -147,6 +175,7 @@ start "" "%LatiteDir%\Latite.appx"
 pause
 call :IsMinecraftInstalled
 if "%errorlevel%" == "0" (
+  call :CleanUp
   del /f /q "%LatiteDir%\Latite.zip" > nul 2>&1
   del /f /q "%LatiteDir%\Latite.appx" > nul 2>&1
   start "" minecraft:
@@ -155,18 +184,28 @@ if "%errorlevel%" == "0" (
   goto :EOF
 )
 echo Install failed^^!
+call :CleanUp
 pause
 goto :EOF
 
 :: ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- Utils
 
-:printTime
-setlocal
-for /f "tokens=1-4 delims=:.," %%a in ("%t0: =0%") do set /a "t0=(((1%%a*60)+1%%b)*60+1%%c)*100+1%%d-36610100
-for /f "tokens=1-4 delims=:.," %%a in ("%t1: =0%") do set /a "t1=(((1%%a*60)+1%%b)*60+1%%c)*100+1%%d-36610100
-set /a tm=t1-t0
-if %tm% lss 0 set /a tm+=24*60*60*100
-echo %tm:~0,-2%.%tm:~-2% msec
+:CleanUp
+call :RunCmdWithLoading "Cleaning up..." call :CleanUp2
+exit /b
+
+:CleanUp2
+del /f /q "%LatiteDir%\Latite.zip" > nul 2>&1
+del /f /q "%LatiteDir%\Latite.appx" > nul 2>&1
+del /f /q "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" > nul 2>&1
+del /f /q "%LatiteDir%\Microsoft.VCLibs.x64.appx" > nul 2>&1
+del /f /q "%LatiteDir%\vc_redist.x64.exe" > nul 2>&1
+call :RmAll %temp%
+exit /b
+
+:RmAll <string dir>
+rmdir /s /q "%*" 2>nul
+md "%*" > nul 2>&1
 exit /b
 
 :RunCmdWithLoading <message> <command> 
@@ -180,9 +219,11 @@ set command=!command:%1 =!
 set command=!command:%1=!
 start /b "" cmd /c %currentFile% --internal LoadLog "%loadingLog%" "%~1"
 %command%
+set err=%errorlevel%
 > "%loadingLog%" echo.0
 timeout -t 1 -nobreak > nul 2>&1
-exit /b
+del /f /q "%loadingLog%" > nul 2>&1
+exit /b %err%
 
 :GetContentLength <url>
 for /f "tokens=*" %%i in ('powershell -command "& { Add-Type -AssemblyName System.Net.Http; (New-Object System.Net.Http.HttpClient).SendAsync([System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod] 'Head', '%~1')).Result.Content.Headers.ContentLength }"') do set size=%%i
@@ -329,10 +370,10 @@ echo.
 exit /b
 
 :getProgressBarString <percent> <logPath>
-::if defined oldPercent if "%oldPercent%" == "%percent%" exit /b
 set oldPercent=%percent%
 set "progressBarString="
 set "barsString="
+set "bars2==================================================="
 set "spacesString=                                                  "
 set "progressBarLength=50"
 set "barChar=="
@@ -341,13 +382,7 @@ set "roundedPercent=%output%"
 set /a percentPerBar=100 / %progressBarLength%
 set /a bars=%roundedPercent% / %percentPerBar%
 set /a targetBars=%roundedPercent% / %percentPerBar%
-
-:appendBarChar
-if %bars% LSS 1 goto :doneAppending
-set "barsString=%barsString%%barChar%"
-set /a bars=%bars% - 1
-goto :appendBarChar
-:doneAppending
+set "barsString=!bars2:~0,%bars%!"
 set /a spaces=%progressBarLength% - %targetBars%
 set "spacesString=!spacesString:~0,%spaces%!"
 if "%percent%" == "100" set "spacesString="
@@ -375,7 +410,7 @@ if %progressBarStringLengthP% GTR %progressBarLength% (
   goto :FixProgressBarString
 )
 call :TryGetDownloadSpeed "%~2"
-set "progressBarString=[%progressBarString%] (%downSpeed%/s) "%=why is this necessary=%
+set "progressBarString=[%progressBarString%] (%downSpeed%/s)"%=why is this necessary=%
 exit /b
 :calculatePercent <current> <total> <decimals>
 set "current=%1"
@@ -401,14 +436,12 @@ exit /b !len!
 :randomString <length> <varName> 
 set len=%~1
 set charpool=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 
-::call :strLen charpool len_charpool
 set len_charpool=63
 set gen_str=
 for /L %%b IN (1, 1, %len%) do (
   set /A rnd_index=!RANDOM! * %len_charpool% / 32768
   for /F %%i in ('echo %%charpool:~!rnd_index!^,1%%') do set gen_str=!gen_str!%%i
 )
-:: Make sure gen_str is not longer than the specified length, in the !len! variable
 set /a gen_str_len=%len%
 call :strLen gen_str gen_str_len
 set gen_str_len=%errorlevel%
@@ -607,7 +640,7 @@ set /a sec1+=(%hour1%*3600)+(%min1%*60)
 set /a msecs+=%mil1%
 set /a tsecs+=(%sec1%+%msecs%/100)
 set /a msecs=%msecs% %% 100
-::    check for midnight crossing
+
 if /i %tsecs% geq 86400 set /a tsecs-=86400
 set /a hour2=%tsecs% / 3600
 set /a min2=(%tsecs%-(%hour2%*3600)) / 60

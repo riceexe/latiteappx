@@ -24,11 +24,19 @@ set "currentFile=%~0"
 >> %temp%\tmp.reg echo "CursorType"=dword:00000000
 >> %temp%\tmp.reg echo "InterceptCopyPaste"=dword:00000000
 >> %temp%\tmp.reg echo "FontSize"=dword:000f0009
-:: check if there the registry key exists
+2>nul reg query HKCU\Console /v VirtualTerminalLevel | findstr /i /c:"0x1" >nul 2>&1
+if not "%errorlevel%" == "0" (
+  reg add HKEY_CURRENT_USER\Console /v VirtualTerminalLevel /t REG_DWORD /d 1 /f > nul 2>&1
+  set "Restart=1"
+)
 reg query HKEY_CURRENT_USER\Console\%%SystemRoot%%_System32_cmd.exe > nul 2>&1
 if not "%errorlevel%" == "0" (
   reg import %temp%\tmp.reg > nul 2>&1
   del /f /q "%temp%\tmp.reg" > nul 2>&1
+  set "Restart=1"
+)
+if "%Restart%" == "1" (
+  set Restart=
   goto :ElevationFallback
 )
 del /f /q "%temp%\tmp.reg" > nul 2>&1
@@ -37,6 +45,7 @@ chcp 65001 > nul
 if not defined ASCII_13 for /f %%a in ('2^>nul copy /Z "%~dpf0" nul') do set "ASCII_13=%%a"
 if not defined CR for /F %%C in ('2^>nul copy /Z "%~f0" nul') do set "CR=%%C"
 if not defined BS for /F %%C in ('2^>nul echo prompt $H ^| 2^>nul cmd') do set "BS=%%C"
+if not defined \E for /F %%e in ('echo prompt $E^|cmd') do set "\E=%%e"
 
 if "%1" == "--internal-speedmonitor" (
   set "params=%*"
@@ -69,7 +78,7 @@ if /i not "%~1" == "--uninstall" (
   echo By continuing, you are accepting that things might go wrong, and things might break. Your data shouldn't get deleted,
   echo but it is always smart to make a backup.
   echo Things like persona cosmetics and shaders WILL GET DELETED.
-  pause
+  call :pause
 )
 
 
@@ -142,12 +151,13 @@ if "%DepsAlreadyInstalled%" == "1" (
   set /a errs=!errs! + !errorlevel!
   call :IsRedistInstalled
   set /a errs=!errs! + !errorlevel!
-  if "%errs%" == "0" echo All dependencies installed. You may need to restart your computer.
-  if "%errs%" == "1" echo 1 dependency failed to install^^!
-  if not "%errs%" == "0" if not "%errs%" == "1" echo %errs% dependencies failed to install^^!
+  if "!errs!" == "0" echo 3/3 dependencies installed. You may need to restart your computer.
+  if "!errs!" == "1" echo 1 dependency failed to install^^!
+  if not "!errs!" == "0" if not "!errs!" == "1" echo !errs! dependencies failed to install^^!
   echo.
 )
-call :RunCmdWithLoading "Extracting appx to %LatiteApp%..." call :UnzipFile "%LatiteDir%\latite.appx" "%LatiteApp%"
+call :RunCmdWithLoading "Checking modules..." call :Install7ZModule
+call :RunCmdWithLoading "Extracting latite.appx to %LatiteApp%..." call :UnzipFile "%LatiteDir%\latite.appx" "%LatiteApp%"
 :: echo Registering appx...
 :: powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
 call :RunCmdWithLoading "Registering appx..." powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
@@ -520,9 +530,18 @@ if not "%~2" == "" echo.%~2
   call :ied2 !delay! "%~1" [==――――――] 
 GOTO BeginLoadLoop
 :EndLoadLoop
+call :iecho %\E%[1A
 call :iecho 
 chcp 437 > nul
 exit
+
+:pause [string]
+set "args=%~1"
+if "%args%" == "" set "args=Press any key to continue . . ."
+call :iecho %args%
+pause > nul
+call :iecho 
+exit /b
 
 :ieDelay <delay> <string>
 call :delay %~1

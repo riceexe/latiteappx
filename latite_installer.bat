@@ -1,21 +1,49 @@
 @:: Latite Appx Installer
 @:: by rice#2532 and VastraKai#0001
-@if not "%debug%" == "true" @echo off
+@if not "%debug%" == "true" @echo off 
 setlocal EnableDelayedExpansion EnableExtensions
+
+:: so the formatting doesn't go all weird when the console outputs a unicode character
+> %temp%\tmp.reg echo Windows Registry Editor Version 5.00
+>> %temp%\tmp.reg echo.
+>> %temp%\tmp.reg echo [HKEY_CURRENT_USER\Console\%%SystemRoot%%_system32_cmd.exe]
+>> %temp%\tmp.reg echo "ScreenBufferSize"=dword:23290000
+>> %temp%\tmp.reg echo "WindowSize"=dword:003600bd
+>> %temp%\tmp.reg echo "FontFamily"=dword:00000036
+>> %temp%\tmp.reg echo "FontWeight"=dword:00000190
+>> %temp%\tmp.reg echo "FaceName"="Lucida Console"
+>> %temp%\tmp.reg echo "CursorType"=dword:00000000
+>> %temp%\tmp.reg echo "InterceptCopyPaste"=dword:00000000
+:: check if there the registry key exists
+reg query HKEY_CURRENT_USER\Console\%SystemRoot%_system32_cmd.exe > nul 2>&1
+if not "%errorlevel%" == "0" reg import %temp%\tmp.reg > nul 2>&1
+del /f /q %temp%\tmp.reg > nul 2>&1
+
+chcp 65001 > nul
 set LatiteDir=%userprofile%\Latite
 set LatiteApp=%LatiteDir%\App
 set LatiteVersion=1.19.63
 set LatiteAppxUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.appx
 set LatiteCertUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.cer
+set "currentFile=%~0"
+if not defined ASCII_13 for /f %%a in ('copy /Z "%~dpf0" nul') do set "ASCII_13=%%a"
+if not defined CR for /F %%C in ('copy /Z "%~f0" nul') do set "CR=%%C"
+if not defined BS for /F %%C in ('echo prompt $H ^| cmd') do set "BS=%%C"
 
-for /f %%a in ('copy /Z "%~dpf0" nul') do set "ASCII_13=%%a"
-for /F %%C in ('copy /Z "%~f0" nul') do set "CR=%%C"
-for /F %%C in ('echo prompt $H ^| cmd') do set "BS=%%C"
 if "%1" == "--internal-speedmonitor" (
   set "params=%*"
+  set "params=!params:--internal-speedmonitor =!"
   set "params=!params:--internal-speedmonitor=!"
   if "!params!" == "1" goto :EOF
   call :DownloadSpeed !params!
+  goto :EOF
+) else if "%1" == "--internal" (
+  set params=%*
+  set "params=!params:%1 =!"
+  set "params=!params:%1=!"
+  set "params=!params:%2 =!"
+  set "params=!params:%2=!"
+  call :%2 !params!
   goto :EOF
 )
 
@@ -27,36 +55,21 @@ if not "%errorlevel%" == "0" (
     call :EnableDeveloperMode
 )
 if /i not "%~1" == "--uninstall" (
-echo DISCLAIMER: This will replace your minecraft installation with latite client. 
-echo By continuing, you are accepting that things might go wrong, and things might break. Your data shouldn't get deleted,
-echo but it is always smart to make a backup.
-echo Things like persona cosmetics and shaders WILL GET DELETED.
-pause
+  echo DISCLAIMER: This will replace your minecraft installation with latite client. 
+  echo By continuing, you are accepting that things might go wrong, and things might break. Your data shouldn't get deleted,
+  echo but it is always smart to make a backup.
+  echo Things like persona cosmetics and shaders WILL GET DELETED.
+  pause
 )
+
+
+
 
 :: Remove current Minecraft bedrock installation
 taskkill /f /im Minecraft.Windows.exe >nul 2>&1
-taskkill /f /im Minecraft.Windows.exe >nul 2>&1
-taskkill /f /im Minecraft.Windows.exe >nul 2>&1
 
-call :IsMinecraftInstalled
-if "%errorlevel%" == "1" (
-  echo Removing old Minecraft Bedrock install...
-  taskkill /f /im PowerToys.PowerLauncher.exe > nul 2>&1 %=NOTE - This will NOT affect the functionality of PowerToys=%
-  powershell -Command "& {Get-AppxPackage Microsoft.MinecraftUWP* | Remove-AppxPackage -PreserveRoamableApplicationData }"
-)
+call :RunCmdWithLoading "Removing current Minecraft installation..." call :RemoveOldMcStuff
 
-rmdir /q /s "%LatiteApp%" > nul 2>&1
-:: if the above command fails, try the below command
-if exist "%LatiteApp%" powershell rmdir "%LatiteApp%" -Recurse -Force > nul 2>&1
-if exist "%LatiteApp%" (
-  echo Failed to remove old Latite directory. 
-  pause
-)
-rmdir /q /s "%LatiteDir%" > nul 2>&1
-
-:: if the above command fails, try the below command
-if exist "%LatiteDir%" powershell rmdir "%LatiteDir%" -Recurse -Force > nul 2>&1
 if /i "%~1" == "--uninstall" (
   echo Latite has been uninstalled.
   goto :EOF
@@ -64,7 +77,6 @@ if /i "%~1" == "--uninstall" (
 
 md "%LatiteDir%"
 md "%LatiteApp%"
-
 
 
 :: Download appx
@@ -77,40 +89,35 @@ call :DownloadFile "%LatiteCertUrl%" "%LatiteDir%\latite.cer"
 certutil -addstore -enterprise -f -v root "%LatiteDir%\latite.cer" > nul
 
 
-
-echo Checking for dependencies...
+echo Checking dependencies (1/3)...
 powershell Get-AppxPackage Microsoft.Services.Store.Engagement* | findstr /I /C:"x64" > nul 2>&1
 if not "%errorlevel%" == "0" (
   echo Downloading Microsoft.Services.Store.Engagement.x64.appx...
   call :DownloadFile "https://vastrakai.wtf/downloads/Microsoft.Services.Store.Engagement.x64.appx" "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx"
-  echo Installing...
-  powershell Add-AppPackage "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" -ForceApplicationShutdown
+  call :RunCmdWithLoading "Installing Microsoft.Services.Store.Engagement.x64..." powershell Add-AppPackage "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" -ForceApplicationShutdown
 )
+echo Checking dependencies (2/3)...
 powershell Get-AppxPackage Microsoft.VCLibs* | findstr /I /C:"x64" > nul 2>&1
 if not "%errorlevel%" == "0" (
   echo Downloading Microsoft.VCLibs.x64.appx...
   call :DownloadFile "https://vastrakai.wtf/downloads/Microsoft.VCLibs.x64.appx" "%LatiteDir%\Microsoft.VCLibs.x64.appx"
-  echo Installing...
-  powershell Add-AppPackage "%LatiteDir%\Microsoft.VCLibs.x64.appx" -ForceApplicationShutdown
+  call :RunCmdWithLoading "Installing Microsoft.VCLibs.x64..." powershell Add-AppPackage "%LatiteDir%\Microsoft.VCLibs.x64.appx" -ForceApplicationShutdown
 )
+echo Checking dependencies (3/3)...
 call :IsRedistInstalled
 if not "%errorlevel%" == "0" (
   echo Downloading vc_redist.x64.exe...
   call :DownloadFile "https://aka.ms/vs/17/release/vc_redist.x64.exe" "%LatiteDir%\vc_redist.x64.exe"
-  echo Installing...
-  "%LatiteDir%\vc_redist.x64.exe" /install /quiet /norestart
+  call :RunCmdWithLoading "Installing Visual C++ Redistributable x64..." "%LatiteDir%\vc_redist.x64.exe" /install /quiet /norestart
 )
 :trydelete
 del /f /q "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" > nul 2>&1
 del /f /q "%LatiteDir%\Microsoft.VCLibs.x64.appx" > nul 2>&1
 del /f /q "%LatiteDir%\vc_redist.x64.exe" > nul 2>&1
 if exist "%LatiteDir%\vc_redist.x64.exe" goto :trydelete
-
-
-
-:: Extract appx
-echo Extracting appx...
-call :UnzipFile "%LatiteDir%\latite.appx" "%LatiteApp%"
+echo Dependencies installed.
+call :RunCmdWithLoading "Extracting appx to %LatiteApp%..." call :UnzipFile "%LatiteDir%\latite.appx" "%LatiteApp%"
+ 
 echo Registering appx...
 powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
 if "%errorlevel%" == "0" (
@@ -137,6 +144,7 @@ echo Failed to auto-install Latite.
 echo Please follow the instructions on the pop up window.
 echo When the installation is complete, press any key to continue.
 start "" "%LatiteDir%\Latite.appx"
+pause
 call :IsMinecraftInstalled
 if "%errorlevel%" == "0" (
   del /f /q "%LatiteDir%\Latite.zip" > nul 2>&1
@@ -146,13 +154,53 @@ if "%errorlevel%" == "0" (
   pause
   goto :EOF
 )
-echo Install failed!
+echo Install failed^^!
+pause
 goto :EOF
 
-:: ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- Utils
+:: ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- Utils
+
+:printTime
+setlocal
+for /f "tokens=1-4 delims=:.," %%a in ("%t0: =0%") do set /a "t0=(((1%%a*60)+1%%b)*60+1%%c)*100+1%%d-36610100
+for /f "tokens=1-4 delims=:.," %%a in ("%t1: =0%") do set /a "t1=(((1%%a*60)+1%%b)*60+1%%c)*100+1%%d-36610100
+set /a tm=t1-t0
+if %tm% lss 0 set /a tm+=24*60*60*100
+echo %tm:~0,-2%.%tm:~-2% msec
+exit /b
+
+:RunCmdWithLoading <message> <command> 
+set num=0
+set "loadingLog=%temp%\"
+call :randomString 40 rndFile
+set "loadingLog=%loadingLog%LTI_%rndFile%.tmp"
+> "%loadingLog%" echo.1
+set command=%*
+set command=!command:%1 =!
+set command=!command:%1=!
+start /b "" cmd /c %currentFile% --internal LoadLog "%loadingLog%" "%~1"
+%command%
+> "%loadingLog%" echo.0
+timeout -t 1 -nobreak > nul 2>&1
+exit /b
 
 :GetContentLength <url>
 for /f "tokens=*" %%i in ('powershell -command "& { Add-Type -AssemblyName System.Net.Http; (New-Object System.Net.Http.HttpClient).SendAsync([System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod] 'Head', '%~1')).Result.Content.Headers.ContentLength }"') do set size=%%i
+exit /b
+
+:RemoveOldMcStuff
+call :IsMinecraftInstalled
+if "%errorlevel%" == "1" (
+  taskkill /f /im PowerToys.PowerLauncher.exe > nul 2>&1 %=NOTE - This will NOT affect the functionality of PowerToys=%
+  powershell -Command "& {Get-AppxPackage Microsoft.MinecraftUWP* | Remove-AppxPackage -PreserveRoamableApplicationData }"
+)
+rmdir /q /s "%LatiteApp%" > nul 2>&1
+:: if the above command fails, try the below command
+if exist "%LatiteApp%" powershell rmdir "%LatiteApp%" -Recurse -Force > nul 2>&1
+rmdir /q /s "%LatiteDir%" > nul 2>&1
+
+:: if the above command fails, try the below command
+if exist "%LatiteDir%" powershell rmdir "%LatiteDir%" -Recurse -Force > nul 2>&1
 exit /b
 
 :formatSize <number> <includeSuffix>
@@ -209,12 +257,6 @@ exit /b
 
 
 :size <file>
-@REM if not defined oldsize set oldsize=0
-@REM if not "%oldsize%" == "%~z1%" (
-@REM     call :formatSize %~z1
-@REM     call :iecho %size% downloaded so far
-@REM )
-@REM set oldsize=%~z1
 set size=%~z1
 exit /b
 
@@ -224,27 +266,19 @@ set targetLocation=%~3
 call :GetContentLength "%sourceUrl%"
 set targetSize=%size%
 set size=0
-@REM echo.Params: '%*'
-@REM echo sourceUrl: '%sourceUrl%'
-@REM echo targetLocation: '%targetLocation%'
-@REM echo targetSize: '%targetSize%'
-@REM echo size: '%size%'
 set currentSize=0
+
 :waitForDownload2
 set size=%~z3
 set /a bytesDownloaded=%size%-%currentSize%
 set "currentSize=%size%"
 if not defined currentSize set "currentSize=0"
-@REM if "%currentSize%" == "0" (
-@REM     set "percent=0"
-@REM ) else (
-@REM     call :calculatePercent %currentSize% %targetSize%
-@REM )
-@REM call :getProgressBarString %percent%
-@REM if not "%oldStr%" == "%progressBarString%" call :iecho %progressBarString%
 call :formatSizeD %bytesDownloaded% downSpeed 1
-::call :iEcho Download speed: %downSpeed%/s, %currentSize%/%targetSize% bytes
+if exist "%~1" (
 >"%~1" echo.%downSpeed%
+) else (
+  goto :downloadFinished2
+)
 timeout -t 1 -nobreak > nul 2>&1
 
 if "%currentSize%" == "%targetSize%" goto :downloadFinished2
@@ -258,9 +292,7 @@ if not exist "%logPath%" (
   set downSpeed=0 
   exit /b
 )
-for /f "tokens=*" %%i in ('type %logPath%') do (
-  if not "%%i" == "" set "downSpeed=%%i"
-)
+< "%logPath%" (set /p downSpeed=)
 if not defined downSpeed set downSpeed=0
 exit /b
 
@@ -271,7 +303,9 @@ set targetLocation=%~2
 call :GetContentLength "%sourceUrl%"
 set targetSize=%size%
 set size=0
-start /b "" cmd /c %~s0 --internal-speedmonitor "%temp%\DownSpeed.tmp" "%sourceUrl%" "%targetLocation%"
+set tmpfile="%temp%\%random%%random%%random%%random%%random%%random%.tmp"
+echo.0 B>"%tmpfile%"
+start /b "" cmd /c %~s0 --internal-speedmonitor %tmpfile% "%sourceUrl%" "%targetLocation%"
 start /b "" powershell -command "(New-Object System.Net.WebClient).DownloadFile(\"%sourceUrl%\", \"%targetLocation%\") "
 
 :waitForDownload
@@ -284,20 +318,22 @@ if "%currentSize%" == "0" (
 ) else (
     call :calculatePercent %currentSize% %targetSize% 1
 )
-call :getProgressBarString %percent%
-if not "%oldStr%" == "%progressBarString%" call :iecho %progressBarString%
+call :getProgressBarString %percent% %tmpfile%
+call :iecho %progressBarString%
 if "%currentSize%" == "%targetSize%" goto :downloadFinished
-call :Delay 100
+::call :Delay 100
 goto :waitForDownload
 :downloadFinished
+del /f /q "%tmpfile%" > nul 2>&1
 echo.
 exit /b
 
-:getProgressBarString <percent>
-if defined oldPercent if "%oldPercent%" == "%percent%" exit /b
+:getProgressBarString <percent> <logPath>
+::if defined oldPercent if "%oldPercent%" == "%percent%" exit /b
 set oldPercent=%percent%
 set "progressBarString="
 set "barsString="
+set "spacesString=                                                  "
 set "progressBarLength=50"
 set "barChar=="
 call :evalVbs Round^^(%percent%^^)
@@ -305,7 +341,7 @@ set "roundedPercent=%output%"
 set /a percentPerBar=100 / %progressBarLength%
 set /a bars=%roundedPercent% / %percentPerBar%
 set /a targetBars=%roundedPercent% / %percentPerBar%
-:: append the barChar to the progressBarString for each bar
+
 :appendBarChar
 if %bars% LSS 1 goto :doneAppending
 set "barsString=%barsString%%barChar%"
@@ -313,51 +349,72 @@ set /a bars=%bars% - 1
 goto :appendBarChar
 :doneAppending
 set /a spaces=%progressBarLength% - %targetBars%
-set "spacesString="
-:appendSpaceChar
-if %spaces% LSS 1 goto :doneAppendingSpaces
-set "spacesString=%spacesString% "
-set /a spaces=%spaces% - 1
-goto :appendSpaceChar
-:doneAppendingSpaces
+set "spacesString=!spacesString:~0,%spaces%!"
+if "%percent%" == "100" set "spacesString="
+call :strlen spacesString spacesStringLength
+call :strlen barsString barsStringLength
+set /a spacesStringLength=%progressBarLength% - %barsStringLength%
+if not %spacesStringLength% == 0 set "spacesString=!spacesString:~0,%spacesStringLength%!"
 set progressBarString=%barsString%%spacesString%
-set percentString=%percent%%%%%
-:: -- Place the percent in the middle of the progressBarString
-:: Get the length of the progressBarString  
-call :strlen progressBarString progressBarStringLength
-:: Get the length of the percent
+set percentString=%percent%•
 call :strlen percentString percentStringLength
-:: Get the length of the progressBarString minus half the length of the percent
-set /a progressPosition=%progressBarStringLength% / 2
+set /a progressPosition=50 / 2
 set "progressBarStringLeft=!progressBarString:~0,%progressPosition%!"
 set "progressBarStringRight=!progressBarString:~%progressPosition%!"
-
 set /a percentStringLength=%percentStringLength% / 2
 set "progressBarStringLeft=!progressBarStringLeft:~0,-%percentStringLength%!"
 set "progressBarStringRight=!progressBarStringRight:~%percentStringLength%!"
-:: Rebuild the progressBarString
 set "progressBarString=%progressBarStringLeft%%percentString%%progressBarStringRight%"
-:: -- Place the percent in the middle of the progressBarString
-call :TryGetDownloadSpeed "%temp%\DownSpeed.tmp"
+:FixProgressBarString
+call :strlen progressBarString progressBarStringLengthP
+if %progressBarStringLengthP% GTR %progressBarLength% (
+  set "progressBarString=%progressBarString:~0,-1%"
+  goto :FixProgressBarString
+) else if %progressBarStringLengthP% LSS %progressBarLength% (
+  set "progressBarString=%progressBarString% "
+  goto :FixProgressBarString
+)
+call :TryGetDownloadSpeed "%~2"
 set "progressBarString=[%progressBarString%] (%downSpeed%/s) "%=why is this necessary=%
 exit /b
-
 :calculatePercent <current> <total> <decimals>
 set "current=%1"
 set "total=%2"
 set "decimals=%3"
 if not exist "%temp%\calculatePercent.vbs" echo wscript.echo(Round(Wscript.Arguments(0) / Wscript.Arguments(1) * 100, Wscript.Arguments(2))) > "%temp%\calculatePercent.vbs"
-for /f "tokens=*" %%i in ('cscript //nologo "%temp%\calculatePercent.vbs" %current% %total% %decimals%') do set "percent=%%i"
+for /f "tokens=*" %%i in ('2^>nul cscript //nologo "%temp%\calculatePercent.vbs" %current% %total% %decimals%') do set "percent=%%i"
 exit /b
 
- 
-:strLen
-setlocal enabledelayedexpansion
-:strLen_Loop
-  if not "!%1:~%len%!"=="" set /A len+=1 & goto :strLen_Loop
-(endlocal & set %2=%len%)
-goto :eof
+:strLen <variable stringVar> <out variable lenVar>
+set "s=A!%~1!" %\n%
+set "len=0" 
+for %%P in (4096 2048 1024 512 256 128 64 32 16 8 4 2 1) do (
+  if not "!s:~%%P,1!" == "" ( 
+    set /a "len+=%%P" 
+    set "s=!s:~%%P!" 
+  ) 
+)
+set "%~2=!len!" 
+exit /b !len!
 
+
+:randomString <length> <varName> 
+set len=%~1
+set charpool=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 
+::call :strLen charpool len_charpool
+set len_charpool=63
+set gen_str=
+for /L %%b IN (1, 1, %len%) do (
+  set /A rnd_index=!RANDOM! * %len_charpool% / 32768
+  for /F %%i in ('echo %%charpool:~!rnd_index!^,1%%') do set gen_str=!gen_str!%%i
+)
+:: Make sure gen_str is not longer than the specified length, in the !len! variable
+set /a gen_str_len=%len%
+call :strLen gen_str gen_str_len
+set gen_str_len=%errorlevel%
+if %gen_str_len% GTR %len% set gen_str=!gen_str:~0,%len%!
+set %~2=%gen_str%
+exit /b
 
 :evalVbs <code>
 if not exist "%temp%\eval.vbs" (
@@ -369,8 +426,90 @@ if not exist "%temp%\eval.vbs" (
   >> "%temp%\eval.vbs" echo WScript.Echo^(Eval^(Join^(arr^)^)^)
 )
 ::echo.%*
-for /f "tokens=*" %%i in ('cscript //nologo "%temp%\eval.vbs" %*') do set "output=%%i"
+for /f "tokens=*" %%i in ('2^>nul cscript //nologo "%temp%\eval.vbs" %*') do set "output=%%i"
 
+exit /b
+
+:LoadLog <conditionP> <string>
+set delay=100
+if not "%~2" == "" echo.%~2
+:BeginLoadLoop
+  set n=0
+  :SL
+  set /a n+=1
+  call :ied2 !delay! "%~1" [=―――――――] 
+  call :ied2 !delay! "%~1" [―=――――――] 
+  call :ied2 !delay! "%~1" [――=―――――] 
+  call :ied2 !delay! "%~1" [―――=――――] 
+  call :ied2 !delay! "%~1" [――――=―――] 
+  call :ied2 !delay! "%~1" [―――――=――] 
+  call :ied2 !delay! "%~1" [――――――=―] 
+  call :ied2 !delay! "%~1" [―――――――=] 
+  call :ied2 !delay! "%~1" [――――――=―] 
+  call :ied2 !delay! "%~1" [―――――=――] 
+  call :ied2 !delay! "%~1" [――――=―――] 
+  call :ied2 !delay! "%~1" [―――=――――] 
+  call :ied2 !delay! "%~1" [――=―――――] 
+  call :ied2 !delay! "%~1" [―=――――――] 
+  if !n! leq 1 goto SL
+  call :ied2 !delay! "%~1" [=―――――――] 
+  call :ied2 !delay! "%~1" [==――――――] 
+  call :ied2 !delay! "%~1" [===―――――] 
+  call :ied2 !delay! "%~1" [====――――] 
+  call :ied2 !delay! "%~1" [=====―――] 
+  call :ied2 !delay! "%~1" [======――] 
+  call :ied2 !delay! "%~1" [=======―] 
+  call :ied2 !delay! "%~1" [========] 
+  call :ied2 !delay! "%~1" [―=======] 
+  call :ied2 !delay! "%~1" [――======] 
+  call :ied2 !delay! "%~1" [―――=====] 
+  call :ied2 !delay! "%~1" [――――====] 
+  call :ied2 !delay! "%~1" [―――――===] 
+  call :ied2 !delay! "%~1" [――――――==] 
+  call :ied2 !delay! "%~1" [―――――――=] 
+  call :ied2 !delay! "%~1" [――――――==] 
+  call :ied2 !delay! "%~1" [―――――===] 
+  call :ied2 !delay! "%~1" [――――====] 
+  call :ied2 !delay! "%~1" [―――=====] 
+  call :ied2 !delay! "%~1" [――======] 
+  call :ied2 !delay! "%~1" [―=======] 
+  call :ied2 !delay! "%~1" [========] 
+  call :ied2 !delay! "%~1" [=======―] 
+  call :ied2 !delay! "%~1" [======――] 
+  call :ied2 !delay! "%~1" [=====―――] 
+  call :ied2 !delay! "%~1" [====――――] 
+  call :ied2 !delay! "%~1" [===―――――] 
+  call :ied2 !delay! "%~1" [==――――――] 
+GOTO BeginLoadLoop
+:EndLoadLoop
+call :iecho [========]
+echo.
+chcp 437 > nul
+exit
+
+:ieDelay <delay> <string>
+call :delay %~1
+:: Remove the first argument from the list of arguments
+set "args=%*"
+set "args=!args:%~1 =!"
+set "args=!args:%~1=!"
+call :iecho %args%
+exit /b
+
+
+:ied2 <delay> <conditionFile> <string>
+call :delay %~1
+set "args=%*"
+set "args=!args:%1 =!"
+set "args=!args:%1=!"
+set "args=!args:%2 =!"
+set "args=!args:%2=!"
+call :iecho %args%
+:: Add a condition check here to see if the parent loop should continue
+if not exist %~2 goto :EndLoadLoop
+for /f "tokens=* eol=#" %%i in ('type %~2 2^> nul') do (
+  if "%%i" == "0" goto :EndLoadLoop
+)
 exit /b
 
 :IsMinecraftInstalled
@@ -430,6 +569,7 @@ setlocal EnableDelayedExpansion
 set "STRING=%*"
 set "SPACCCES=                                                                             "
 ::set /P ="%BS%!CR!%SPACES%!CR!" < nul
+set string=!string:•=%%!
 set /p <nul =%BS%!CR!%SPACCCES%!CR!%STRING%
 exit /B
 
@@ -450,7 +590,6 @@ powershell get-module -All -ListAvailable | findstr /i /c:"7zip4powershell" > nu
 exit /b
 
 :Delay <milliseconds>
-setlocal enableextensions
 set /a correct=0
 set /a msecs=%1+5
 if /i %msecs% leq 20 set /a correct-=2
@@ -487,4 +626,4 @@ goto :wait
 for /f "tokens=2 delims=." %%a in ("%timen%") do set num=%%a
 if /i %num:~0,1% equ 0 set num=%num:~1%
 set /a err=(%num%-%err%)*10
-endlocal&exit /b %err%
+exit /b %err%

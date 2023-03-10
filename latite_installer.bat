@@ -80,14 +80,14 @@ if /i not "%~1" == "--uninstall" (
   echo Things like persona cosmetics and shaders WILL GET DELETED.
   call :pause
 )
-
+echo.
 
 
 
 :: Remove current Minecraft bedrock installation
 taskkill /f /im Minecraft.Windows.exe >nul 2>&1
 
-call :RunCmdWithLoading "Removing current Minecraft installation..." call :RemoveOldMcStuff
+call :RunCmdWithLoading "Removing current Minecraft installation..." 1 call :RemoveOldMcStuff
 
 if /i "%~1" == "--uninstall" (
   echo Latite has been uninstalled.
@@ -115,7 +115,7 @@ if not "%errorlevel%" == "0" (
   call :iEcho Downloading Microsoft.Services.Store.Engagement.x64.appx...
   echo.
   call :DownloadFile "https://vastrakai.wtf/downloads/Microsoft.Services.Store.Engagement.x64.appx" "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx"
-  call :RunCmdWithLoading "Installing Microsoft.Services.Store.Engagement.x64..." powershell Add-AppPackage "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" -ForceApplicationShutdown
+  call :RunCmdWithLoading "Installing Microsoft.Services.Store.Engagement.x64..." 0 powershell Add-AppPackage "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" -ForceApplicationShutdown
 )
 call :iecho Checking dependencies ^(2/3^)...
 powershell Get-AppxPackage Microsoft.VCLibs* | findstr /I /C:"x64" > nul 2>&1
@@ -124,7 +124,7 @@ if not "%errorlevel%" == "0" (
   call :iEcho Downloading Microsoft.VCLibs.x64.appx...
   echo.
   call :DownloadFile "https://vastrakai.wtf/downloads/Microsoft.VCLibs.x64.appx" "%LatiteDir%\Microsoft.VCLibs.x64.appx"
-  call :RunCmdWithLoading "Installing Microsoft.VCLibs.x64..." powershell Add-AppPackage "%LatiteDir%\Microsoft.VCLibs.x64.appx" -ForceApplicationShutdown
+  call :RunCmdWithLoading "Installing Microsoft.VCLibs.x64..." 0 powershell Add-AppPackage "%LatiteDir%\Microsoft.VCLibs.x64.appx" -ForceApplicationShutdown
 )
 call :iecho Checking dependencies ^(3/3^)...
 call :IsRedistInstalled
@@ -133,7 +133,7 @@ if not "%errorlevel%" == "0" (
   call :iEcho Downloading Visual C++ Redistributable x64...
   echo.
   call :DownloadFile "https://aka.ms/vs/17/release/vc_redist.x64.exe" "%LatiteDir%\vc_redist.x64.exe"
-  call :RunCmdWithLoading "Installing Visual C++ Redistributable x64..." "%LatiteDir%\vc_redist.x64.exe" /install /quiet /norestart
+  call :RunCmdWithLoading "Installing Visual C++ Redistributable x64..." 0 "%LatiteDir%\vc_redist.x64.exe" /install /quiet /norestart
 )
 :trydelete
 del /f /q "%LatiteDir%\Microsoft.Services.Store.Engagement.x64.appx" > nul 2>&1
@@ -156,11 +156,11 @@ if "%DepsAlreadyInstalled%" == "1" (
   if not "!errs!" == "0" if not "!errs!" == "1" echo !errs! dependencies failed to install^^!
   echo.
 )
-call :RunCmdWithLoading "Checking modules..." call :Install7ZModule
-call :RunCmdWithLoading "Extracting latite.appx to %LatiteApp%..." call :UnzipFile "%LatiteDir%\latite.appx" "%LatiteApp%"
+call :RunCmdWithLoading "Checking modules..." 1 call :Install7ZModule
+call :RunCmdWithLoading "Extracting latite.appx to %LatiteApp%..." 0 call :UnzipFile "%LatiteDir%\latite.appx" "%LatiteApp%"
 :: echo Registering appx...
 :: powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
-call :RunCmdWithLoading "Registering appx..." powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
+call :RunCmdWithLoading "Registering appx..." 0 powershell Add-AppxPackage -Path "%LatiteApp%\AppxManifest.xml" -Register
 if "%errorlevel%" == "0" (
   call :CleanUp
   echo Latite has been installed^^!
@@ -206,7 +206,7 @@ goto :EOF
 :: ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- Utils
 
 :CleanUp
-call :RunCmdWithLoading "Cleaning up..." call :CleanUp2
+call :RunCmdWithLoading "Cleaning up..." 1 call :CleanUp2
 exit /b
 
 :CleanUp2
@@ -223,7 +223,7 @@ rmdir /s /q "%*" 2>nul
 md "%*" > nul 2>&1
 exit /b
 
-:RunCmdWithLoading <message> <command> 
+:RunCmdWithLoading <message> <removeWhenDone> <command> 
 set num=0
 set "loadingLog=%temp%\"
 call :randomString 40 rndFile
@@ -232,7 +232,9 @@ set "loadingLog=%loadingLog%LTI_%rndFile%.tmp"
 set command=%*
 set command=!command:%1 =!
 set command=!command:%1=!
-start /b "" cmd /c %currentFile% --internal LoadLog "%loadingLog%" "%~1"
+if not "%2" == "" set command=!command:%2 =!
+if not "%2" == "" set command=!command:%2=!
+start /b "" cmd /c %currentFile% --internal LoadLog "%loadingLog%" "%~1" "%~2"
 %command%
 set err=%errorlevel%
 > "%loadingLog%" echo.0
@@ -248,15 +250,14 @@ exit /b
 call :IsMinecraftInstalled
 if "%errorlevel%" == "1" (
   taskkill /f /im PowerToys.PowerLauncher.exe > nul 2>&1 %=NOTE - This will NOT affect the functionality of PowerToys=%
-  powershell -Command "& {Get-AppxPackage Microsoft.MinecraftUWP* | Remove-AppxPackage -PreserveRoamableApplicationData }"
+  powershell Get-AppxPackage Microsoft.MinecraftUWP* ^| Remove-AppxPackage -PreserveRoamableApplicationData
+  powershell Get-AppxPackage Microsoft.MinecraftUWP* ^| Remove-AppxPackage -PreserveRoamableApplicationData
+  powershell Get-AppxPackage Microsoft.MinecraftUWP* ^| Remove-AppxPackage -PreserveRoamableApplicationData
 )
-rmdir /q /s "%LatiteApp%" > nul 2>&1
-:: if the above command fails, try the below command
-if exist "%LatiteApp%" powershell rmdir "%LatiteApp%" -Recurse -Force > nul 2>&1
-rmdir /q /s "%LatiteDir%" > nul 2>&1
-
-:: if the above command fails, try the below command
-if exist "%LatiteDir%" powershell rmdir "%LatiteDir%" -Recurse -Force > nul 2>&1
+if exist "%LatiteApp%" rmdir /q /s "%LatiteApp%" > nul
+if exist "%LatiteDir%" rmdir /q /s "%LatiteDir%" > nul
+if exist "%LatiteApp%" rmdir /q /s "%LatiteApp%" > nul
+if exist "%LatiteDir%" rmdir /q /s "%LatiteDir%" > nul
 exit /b
 
 :formatSize <number> <includeSuffix>
@@ -427,6 +428,7 @@ if %progressBarStringLengthP% GTR %progressBarLength% (
 call :TryGetDownloadSpeed "%~2"
 set "progressBarString=[%progressBarString%] (%downSpeed%/s)"%=why is this necessary=%
 exit /b
+
 :calculatePercent <current> <total> <decimals>
 set "current=%1"
 set "total=%2"
@@ -478,7 +480,9 @@ for /f "tokens=*" %%i in ('2^>nul cscript //nologo "%temp%\eval.vbs" %*') do set
 
 exit /b
 
-:LoadLog <conditionP> <string>
+:LoadLog <conditionP> <string> <removeWhenDone>
+set removeWhenDone=%~3
+set removeWhenDone=!removeWhenDone: =!
 set delay=100
 if not "%~2" == "" echo.%~2
 :BeginLoadLoop
@@ -528,11 +532,17 @@ if not "%~2" == "" echo.%~2
   call :ied2 !delay! "%~1" [====――――] 
   call :ied2 !delay! "%~1" [===―――――] 
   call :ied2 !delay! "%~1" [==――――――] 
+
 GOTO BeginLoadLoop
 :EndLoadLoop
-call :iecho %\E%[1A
-call :iecho 
-chcp 437 > nul
+
+if "!removeWhenDone!" == "1" (
+  call :iecho %\E%[1A
+  call :iecho 
+) else (
+  call :iecho [========] 
+  echo.
+)
 exit
 
 :pause [string]

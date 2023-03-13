@@ -10,6 +10,7 @@ set LatiteApp=%LatiteDir%\App
 set LatiteAppxUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.appx
 set LatiteCertUrl=https://github.com/riceexe/latiteappx/releases/download/%LatiteVersion%/%LatiteVersion%.cer
 setlocal EnableDelayedExpansion EnableExtensions
+set "originalArgs=%*"
 set "currentFile=%~0"
 
 :: so the formatting doesn't go all weird when the console outputs a unicode character
@@ -79,8 +80,8 @@ if /i not "%~1" == "--uninstall" (
   echo but it is always smart to make a backup.
   echo Things like persona cosmetics and shaders WILL GET DELETED.
   call :pause
+  echo.
 )
-echo.
 
 
 
@@ -90,7 +91,9 @@ taskkill /f /im Minecraft.Windows.exe >nul 2>&1
 call :RunCmdWithLoading "Removing current Minecraft installation..." 1 call :RemoveOldMcStuff
 
 if /i "%~1" == "--uninstall" (
+  echo.
   echo Latite has been uninstalled.
+  call :PauseIf
   goto :EOF
 )
 
@@ -248,16 +251,22 @@ exit /b
 
 :RemoveOldMcStuff
 call :IsMinecraftInstalled
-if "%errorlevel%" == "0" (
-  taskkill /f /im PowerToys.PowerLauncher.exe > nul 2>&1 %=NOTE - This will NOT affect the functionality of PowerToys=%
-  powershell Get-AppxPackage Microsoft.MinecraftUWP* ^| Remove-AppxPackage -PreserveRoamableApplicationData
-  call :IsMinecraftInstalled
-  if "%errorlevel%" == "0" goto :RemoveOldMcStuff
-)
-if exist "%LatiteApp%" rmdir /q /s "%LatiteApp%" > nul
-if exist "%LatiteDir%" rmdir /q /s "%LatiteDir%" > nul
-if exist "%LatiteApp%" rmdir /q /s "%LatiteApp%" > nul
-if exist "%LatiteDir%" rmdir /q /s "%LatiteDir%" > nul
+if not "%errorlevel%" == "0" goto :Rm2
+:: The launcher sometimes locks the AppxManifest for some reason, so i have to kill it
+:: Keep in mind, this will not affect the functionality of PowerToys
+taskkill /f /im PowerToys.PowerLauncher.exe > nul 2>&1
+powershell Get-AppxPackage Microsoft.MinecraftUWP* ^| Remove-AppxPackage -PreserveRoamableApplicationData
+2>nul call :IsMinecraftInstalled
+if "%errorlevel%" == "0" goto :RemoveOldMcStuff
+if exist "%LatiteApp%" rmdir /q /s "%LatiteApp%" > nul 2>&1
+if exist "%LatiteDir%" rmdir /q /s "%LatiteDir%" > nul 2>&1
+if exist "%LatiteApp%" rmdir /q /s "%LatiteApp%" > nul 2>&1
+if exist "%LatiteDir%" rmdir /q /s "%LatiteDir%" > nul 2>&1
+exit /b
+
+:Rm2
+if exist "%LatiteApp%" rmdir /q /s "%LatiteApp%" > nul 2>&1
+if exist "%LatiteDir%" rmdir /q /s "%LatiteDir%" > nul 2>&1
 exit /b
 
 :formatSize <number> <includeSuffix>
@@ -466,6 +475,12 @@ if %gen_str_len% GTR %len% set gen_str=!gen_str:~0,%len%!
 set %~2=%gen_str%
 exit /b
 
+:PauseIf
+echo %cmdcmdline% | ^
+findstr /i /c:"C:\WINDOWS\system32\cmd.exe /c \"\"" > nul 2>&1 ^
+&& pause
+exit /b
+
 :evalVbs <code>
 if not exist "%temp%\eval.vbs" (
   > "%temp%\eval.vbs" echo ReDim arr^(WScript.Arguments.Count-1^)
@@ -481,6 +496,7 @@ for /f "tokens=*" %%i in ('2^>nul cscript //nologo "%temp%\eval.vbs" %*') do set
 exit /b
 
 :LoadLog <conditionP> <string> <removeWhenDone>
+echo off
 set removeWhenDone=%~3
 set removeWhenDone=!removeWhenDone: =!
 set delay=100
@@ -579,7 +595,7 @@ for /f "tokens=* eol=#" %%i in ('type %~2 2^> nul') do (
 exit /b
 
 :IsMinecraftInstalled
-powershell Get-AppxPackage Microsoft.MinecraftUWP* | findstr /i /c:"microsoft.minecraftuwp" > nul 2>&1
+powershell Get-AppxPackage Microsoft.MinecraftUWP* 2>nul | findstr /i /c:"microsoft.minecraftuwp" > nul 2>&1
 exit /b %errorlevel%
 
 :IsRedistInstalled
@@ -651,10 +667,9 @@ echo.
 echo =-=-=-=-=-=-=-=-=-=-=-=-=
 echo Waiting for elevation...
 echo =-=-=-=-=-=-=-=-=-=-=-=-=
-taskkill /f /im waitfor.exe > nul 2>&1
 
 :: short file names are required here, if you don't use them you will get errors with spaces
-powershell.exe Start-Process cmd.exe -Verb RunAs -ArgumentList '/c "%~s0"' > %temp%\LTIElevSetup.log 2>&1
+powershell.exe Start-Process cmd.exe -Verb RunAs -ArgumentList '/c "%~s0" %originalArgs%' > %temp%\LTIElevSetup.log 2>&1
 if not "%errorlevel%" == "0" (
     echo.
     echo =-=-=-=-=-=-=-=-=-=-=-=-=

@@ -248,11 +248,11 @@ exit /b
 
 :RemoveOldMcStuff
 call :IsMinecraftInstalled
-if "%errorlevel%" == "1" (
+if "%errorlevel%" == "0" (
   taskkill /f /im PowerToys.PowerLauncher.exe > nul 2>&1 %=NOTE - This will NOT affect the functionality of PowerToys=%
   powershell Get-AppxPackage Microsoft.MinecraftUWP* ^| Remove-AppxPackage -PreserveRoamableApplicationData
-  powershell Get-AppxPackage Microsoft.MinecraftUWP* ^| Remove-AppxPackage -PreserveRoamableApplicationData
-  powershell Get-AppxPackage Microsoft.MinecraftUWP* ^| Remove-AppxPackage -PreserveRoamableApplicationData
+  call :IsMinecraftInstalled
+  if "%errorlevel%" == "0" goto :RemoveOldMcStuff
 )
 if exist "%LatiteApp%" rmdir /q /s "%LatiteApp%" > nul
 if exist "%LatiteDir%" rmdir /q /s "%LatiteDir%" > nul

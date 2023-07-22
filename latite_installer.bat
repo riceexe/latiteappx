@@ -2,7 +2,7 @@
 @:: by rice#2532 and VastraKai#0001
 @if not "%debug%" == "true" @echo off 
 :: The version of Latite to install.
-set LatiteVersion=1.20.10
+set LatiteVersion=1.20.12
 :: The directory to use for installation.
 set LatiteDir=%userprofile%\Latite
 :: The directory to install the appx to.

@@ -76,7 +76,7 @@ title Latite %LatiteVersion% Appx Installer
 if /i not "%~1" == "--uninstall" (
   echo.
   echo IMPORTANT NOTICE: Effective 2023-08-10, the Latite Client APPX will no longer be recieving updates.
-  echo You may continue to use this installer its replacement is relelased.
+  echo You may continue to use this installer until its replacement is relelased.
   echo Join our discord server at discord.gg/latite to learn more about this change.
   pause
   echo DISCLAIMER: This will replace your minecraft installation with latite client. 
